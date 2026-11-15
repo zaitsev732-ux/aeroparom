@@ -224,7 +224,7 @@ function draw(){
  // Вид сверху: рули и отклонение потока
  x.save();x.translate(15,14);x.fillStyle='rgba(10,18,27,.82)';x.fillRect(0,0,255,112);x.strokeStyle='#243447';x.lineWidth=2;x.strokeRect(0,0,255,112);
  x.fillStyle='#8aa0b5';x.font='11px Arial';x.textAlign='left';x.fillText('Вид сверху: рули и поток',8,14);
- x.strokeStyle='#5aa9ff';x.lineWidth=2;x.strokeRect(10,40,98,40);
+ x.beginPath();x.moveTo(8,60);x.quadraticCurveTo(26,40,62,40);x.lineTo(108,40);x.lineTo(108,80);x.lineTo(62,80);x.quadraticCurveTo(26,80,8,60);x.closePath();x.fillStyle='rgba(90,169,255,.15)';x.fill();x.strokeStyle='#5aa9ff';x.lineWidth=2;x.stroke();
  line(112,36,112,84,'#29d3ff',3);
  var dd=S.rud/100*.5;
  [52,68].forEach(function(py){line(128,py,128+30*Math.cos(dd),py+30*Math.sin(dd),'#ff8a3d',3)});
