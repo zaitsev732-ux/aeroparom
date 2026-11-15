@@ -180,7 +180,7 @@ function draw(){
  // Кольцевая насадка с дополнительными каналами
  if(cf===2){
   x.strokeStyle='#29d3ff';x.lineWidth=4;x.beginPath();
-  x.moveTo(790,162);x.lineTo(860,162);x.moveTo(790,338);x.lineTo(860,338);
+  x.fillStyle='rgba(41,211,255,.22)';x.fillRect(790,149,70,12);x.fillRect(790,339,70,12);x.moveTo(790,162);x.lineTo(860,162);x.moveTo(790,338);x.lineTo(860,338);
   x.moveTo(775,148);x.lineTo(875,148);x.moveTo(775,352);x.lineTo(875,352);x.stroke();
   x.lineWidth=2;x.beginPath();x.moveTo(790,148);x.lineTo(790,162);x.moveTo(860,148);x.lineTo(860,162);x.moveTo(790,338);x.lineTo(790,352);x.moveTo(860,338);x.lineTo(860,352);x.stroke();
   x.lineWidth=3;x.beginPath();x.ellipse(790,250,10,88,0,0,7);x.stroke();
@@ -211,14 +211,14 @@ function draw(){
    var v=(p.x<810?40+620*f:100+2000*f)*p.k;
    line(p.x,p.y,p.x-4-v*.03,p.y,'rgba(130,225,255,'+(.15+.5*f)+')',1.6);
   });
-  if(cf===2)C.forEach(function(c){line(c.x,c.y,c.x-10-f*30,c.y,'rgba(180,255,255,.9)',2)});
+  if(cf===2){x.fillStyle='rgba(200,255,255,.95)';C.forEach(function(c){x.beginPath();x.moveTo(c.x+4,c.y);x.lineTo(c.x-4,c.y-3.5);x.lineTo(c.x-4,c.y+3.5);x.closePath();x.fill()})}
  }
  // Подписи узлов
  x.textAlign='center';
  lb('Джойстик',110,306,95,262);lb('АКБ 48 В',177,290,177,235);lb('Arduino Nano',268,318,268,275);lb('ESC (регулятор)',357,298,357,215);
  lb('БК-двигатель, прямой привод (без редуктора)',733,225,600,186);
  lb(cf===0?'Стандартный винт (открытый)':cf===1?'Перфорированные лопасти (открытый винт)':'Перфорированные лопасти в насадке',810,170,740,100,cf<2?'#ff8a8a':'');
- if(cf===2)lb('Насадка + каналы',860,148,915,126);
+ if(cf===2){lb('Кольцевая насадка',860,148,915,126);lb('Доп. каналы (эжектор)',835,351,905,382)}
  lb('Воздушные рули',895,322,940,292);
  lb('Упругодемпфирующий слой + антифрикционное покрытие',500,398,500,440);
  // Вид сверху: рули и отклонение потока
