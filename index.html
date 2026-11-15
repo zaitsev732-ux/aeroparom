@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Аэропаром: лопастной электродвижитель — ВВГУ-40</title>
+<style>
+:root{--bg:#0b1118;--pn:#121b26;--bd:#243447;--tx:#e6eef7;--mu:#8aa0b5;--ac:#29d3ff;--or:#ff8a3d;--rd:#ff4d4d;--ok:#3ddc97;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--tx);font:14px Arial,Helvetica,sans-serif}
+.app{height:100%;display:grid;grid-template-rows:minmax(0,1fr) auto}
+.sc{position:relative;min-height:0}
+#sc{position:absolute;inset:0;width:100%;height:100%;display:block}
+.pn{background:var(--pn);border-top:2px solid var(--bd);padding:8px 10px;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap}
+.gz{width:min(22vw,24vh,150px);aspect-ratio:1}.gz canvas{width:100%;height:100%;display:block}
+.box{display:flex;flex-direction:column;gap:6px}
+.dg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.dg div{background:#0a121b;border:1px solid var(--bd);border-radius:8px;padding:3px 8px;text-align:center;min-width:72px}
+.dg b{display:block;font:bold 17px monospace;color:var(--ac)}
+.dg span{font-size:10px;color:var(--mu)}
+.ctl{min-width:min(300px,90vw)}
+label{font-size:12px;color:var(--mu);display:flex;justify-content:space-between}
+label b{color:var(--or)}
+input[type=range]{width:100%;accent-color:var(--or);height:24px;margin:0}
+select{background:#0a121b;color:var(--tx);border:1px solid var(--ac);border-radius:6px;padding:6px;font:13px Arial;width:100%}
+button{background:#1d2c3d;color:var(--tx);border:2px solid var(--ac);border-radius:8px;padding:8px 12px;font:bold 14px Arial;cursor:pointer}
+button.on{background:#0d4f33;border-color:var(--ok)}
+.hint{font-size:11px;color:var(--mu);text-align:center}
+#stt{color:var(--ok)}
+@media(max-height:600px){.hint{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="sc"><canvas id="sc"></canvas></div>
+<div class="pn">
+<div class="gz"><canvas id="tach" width="300" height="300"></canvas></div>
+<div class="gz"><canvas id="spd" width="300" height="300"></canvas></div>
+<div class="box">
+<div class="dg">
+<div><b id="eta">0</b><span>КПД, %</span></div><div><b id="pw">0.0</b><span>Мощн., кВт</span></div><div><b id="cur">0</b><span>Ток, А</span></div><div><b id="vol">52</b><span>Напр., В</span></div>
+<div><b id="soc">100</b><span>Заряд АКБ, %</span></div><div><b id="tp">20</b><span>Темп. дв., °C</span></div><div><b id="tq">0</b><span>Тяга, кгс</span></div><div><b id="nz">—</b><span>Шум, дБ</span></div>
+</div>
+<div class="hint" id="stt">ESC: питание выключено</div>
+<div class="hint">Электропривод 90–95 % · ДВС-аналог 22–60 %</div>
+</div>
+<div class="box ctl">
+<select id="cf"><option value="0">Стандартные лопасти, открытый винт</option><option value="1">Перфорированные лопасти наборного типа</option><option value="2" selected>Перфорированные лопасти + насадка + каналы</option></select>
+<label>Джойстик: тяга <b id="tv">0%</b></label>
+<input type="range" id="thr" min="0" max="100" step="1" value="0">
+<label>Воздушные рули <b id="rv">0%</b></label>
+<input type="range" id="rud" min="-100" max="100" step="1" value="0">
+<button id="st">ВКЛЮЧИТЬ ПИТАНИЕ (ESC)</button>
+</div>
+</div>
+</div>
+<script>
+(function(){
+'use strict';
+var $=function(i){return document.getElementById(i)};
+var cv=$('sc'),x=cv.getContext('2d');
+// Состояние системы; cf — конфигурация лопастей (0 стандартные, 1 перфорированные, 2 + насадка и каналы)
+var S={on:false,prop:0,rpm:0,th:0,rud:0,v:0,temp:20,thr:0,t:0,wave:0,cl:0,soc:100,p:0,i:0,u:52,eta:0,cf:2};
+var KT=[1,1.08,1.2],DB=[0,-4,-7];
+var keys={},drag=false,W=1,H=1,sc=1,ox=0,oy=0,P=[],C=[],D=[],last=0,i;
+for(i=0;i<130;i++)P.push({x:Math.random()*1000,y:250+(Math.random()-.5)*190,k:.7+Math.random()*.6});
+for(i=0;i<30;i++)C.push({x:775+Math.random()*100,y:Math.random()<.5?155:345,k:.8+Math.random()*.4});
+
+// Размер холста под окно (логическая сцена 1000x480)
+function rs(){var d=window.devicePixelRatio||1,r=cv.getBoundingClientRect();W=cv.width=Math.max(1,r.width*d);H=cv.height=Math.max(1,r.height*d);sc=Math.min(W/1000,H/480);ox=(W-1000*sc)/2;oy=(H-480*sc)/2}
+new ResizeObserver(rs).observe(cv);rs();
+
+// Питание ESC (вкл/выкл)
+function pwr(on){S.on=on;var b=$('st');b.textContent=on?'ВЫКЛЮЧИТЬ ПИТАНИЕ':'ВКЛЮЧИТЬ ПИТАНИЕ (ESC)';b.classList.toggle('on',on);b.blur()}
+$('st').onclick=function(){if(S.soc>0)pwr(!S.on)};
+$('thr').oninput=function(){S.th=+this.value};
+$('cf').onchange=function(){S.cf=+this.value;this.blur()};
+$('rud').onpointerdown=function(){drag=true};
+window.addEventListener('pointerup',function(){drag=false});
+window.addEventListener('pointercancel',function(){drag=false});
+window.addEventListener('keydown',function(e){
+ if(['KeyW','KeyS','KeyA','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].indexOf(e.code)<0)return;
+ e.preventDefault();if(e.code==='Space'&&!keys.Space)$('st').click();keys[e.code]=1});
+window.addEventListener('keyup',function(e){keys[e.code]=0});
+
+// Физика
+function upd(dt){
+ S.t+=dt;
+ if(keys.KeyW||keys.ArrowUp)S.th=Math.min(100,S.th+45*dt);
+ if(keys.KeyS||keys.ArrowDown)S.th=Math.max(0,S.th-45*dt);
+ var rt=drag?+$('rud').value:((keys.KeyD||keys.ArrowRight?100:0)-(keys.KeyA||keys.ArrowLeft?100:0));
+ S.rud+=(rt-S.rud)*Math.min(1,dt*7);
+ if(!drag)$('rud').value=S.rud;
+ $('thr').value=S.th;
+ // Бесколлекторный двигатель: нет холостого хода, момент с нуля — отклик быстрый
+ var tg=(S.on&&S.th>=4)?S.th*50:0;
+ S.rpm+=(tg-S.rpm)*Math.min(1,dt*(S.on?4:2.5));if(S.rpm<3&&!tg)S.rpm=0;
+ var f=S.rpm/5000;
+ S.thr=120*KT[S.cf]*f*f;
+ // Мощность на валу ~n^3, электрическая = вал / КПД (90–95 %), ток от напряжения АКБ
+ S.eta=S.rpm>5?.9+.05*f:0;
+ S.p=(S.on&&S.eta)?7000*f*f*f/S.eta:0;
+ S.u=44+8*S.soc/100-S.p/8000*2;S.i=S.p/S.u;
+ S.soc=Math.max(0,S.soc-S.p*dt*.0001157);   // расход заряда ускорен примерно в 20 раз
+ if(S.soc<=0&&S.on)pwr(false);
+ // Скорость с инерцией: сопротивление ~v^2 + трение
+ S.v+=((S.thr-.0132*S.v*S.v-(S.v>.5?6:0))/16)*dt;if(S.v<0)S.v=0;
+ var tt=20+60*S.p/7000;S.temp+=(tt-S.temp)*dt*.05;
+ S.prop-=S.rpm/60*6.283*.08*dt;   // прямой привод: винт вращается вместе с ротором (замедленная съёмка)
+ S.wave+=(S.v*9+14)*dt;S.cl+=(S.v*1.2+3)*dt;
+ // Воздушный поток
+ var pf=S.rpm>40?1:0;
+ P.forEach(function(p){
+  var vf=(40+620*f)*p.k*pf,vb=(100+2000*f)*p.k*pf;
+  if(p.x<810){p.x+=vf*(.35+.65*p.x/810)*dt;p.y+=(250-p.y)*dt*(.4+3*p.x/810)*pf}
+  else{p.x+=vb*dt;p.y+=S.rud*dt*.5*(vb/600)}
+  if(p.x>1060||p.y<-20||p.y>470){p.x=-Math.random()*80;p.y=250+(Math.random()-.5)*200}
+ });
+ // Воздух в дополнительных каналах насадки (эжектор)
+ C.forEach(function(c){c.x+=(200+2200*f)*c.k*dt;if(c.x>875)c.x=775+Math.random()*6});
+ // Брызги у носа
+ if(S.v>4&&Math.random()<dt*S.v*1.2)D.push({x:70,y:384,vx:(10+S.v*2)*Math.random(),vy:-(50+S.v*2.2)*Math.random(),l:1});
+ D.forEach(function(d){d.x+=d.vx*dt;d.y+=d.vy*dt;d.vy+=420*dt;d.l-=dt*1.1});
+ D=D.filter(function(d){return d.l>0&&d.y<400});
+}
+
+// Вспомогательные функции рисования
+function lb(t,px,py,tx,ty,col){
+ x.setLineDash([]);x.strokeStyle='rgba(255,208,128,.7)';x.lineWidth=1;x.beginPath();x.moveTo(px,py);x.lineTo(tx,ty);x.stroke();
+ x.fillStyle=col||'#ffd080';x.font='bold 13px Arial';x.fillText(t,tx,ty<py?ty-4:ty+14);
+}
+function dots(x1,y1,x2,y2,col,sp){
+ x.fillStyle=col;
+ for(var n=0;n<3;n++){var t=(S.t*sp+n/3)%1;x.beginPath();x.arc(x1+(x2-x1)*t,y1+(y2-y1)*t,2.6,0,7);x.fill()}
+}
+function line(x1,y1,x2,y2,col,w){x.strokeStyle=col;x.lineWidth=w;x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()}
+
+// Отрисовка сцены
+function draw(){
+ x.setTransform(1,0,0,1,0,0);
+ var g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#0b1a2b');g.addColorStop(1,'#1c3a55');x.fillStyle=g;x.fillRect(0,0,W,H);
+ x.setTransform(sc,0,0,sc,ox,oy);x.textAlign='center';
+ var L=-ox/sc-10,R=(W-ox)/sc+10,f=S.rpm/5000,k,a,cf=S.cf,on=S.on&&S.rpm>5;
+ x.fillStyle='rgba(255,255,255,.07)';
+ for(i=0;i<6;i++){x.beginPath();x.ellipse(((i*260+S.cl)%1500)-250,60+(i%3)*35,70,16,0,0,7);x.fill()}
+ // Лодка (качка и дифферент по скорости)
+ x.save();x.translate(0,Math.sin(S.t*2.2)*1.6);x.translate(460,385);x.rotate(-S.v/110*.035);x.translate(-460,-385);
+ function hull(){x.beginPath();x.moveTo(40,320);x.lineTo(100,340);x.lineTo(900,340);x.lineTo(920,372);x.lineTo(880,396);x.lineTo(130,396);x.lineTo(70,372);x.closePath()}
+ x.save();x.translate(14,-9);hull();x.strokeStyle='rgba(90,169,255,.25)';x.lineWidth=2;x.stroke();x.restore();   // второй корпус катамарана
+ hull();x.fillStyle='rgba(60,120,180,.18)';x.fill();x.strokeStyle='#5aa9ff';x.lineWidth=2;x.stroke();
+ // Упругодемпфирующий слой и антифрикционное покрытие днища
+ x.fillStyle='rgba(255,179,71,.55)';x.fillRect(130,390,750,6);x.strokeStyle='#cfe3f5';x.lineWidth=1.5;
+ for(i=0;i<25;i++)x.strokeRect(132+i*30,396,32,3);
+ // Джойстик
+ var ja=S.th/100*.9-.45,jx=110+26*Math.sin(ja),jy=332-26*Math.cos(ja);
+ x.fillStyle='#243447';x.fillRect(95,332,30,8);line(110,332,jx,jy,'#e6eef7',4);x.fillStyle='#ff4d4d';x.beginPath();x.arc(jx,jy,5,0,7);x.fill();
+ // АКБ
+ x.fillStyle='#1a2736';x.strokeStyle='#3ddc97';x.lineWidth=2;x.fillRect(140,290,75,48);x.strokeRect(140,290,75,48);
+ x.fillStyle=S.soc>20?'#3ddc97':'#ff4d4d';x.fillRect(146,296,63*S.soc/100,12);
+ x.fillStyle='#8aa0b5';x.font='11px Arial';x.fillText('48 В',177,328);
+ // Arduino Nano
+ x.fillStyle='#0d3b4f';x.strokeStyle='#29d3ff';x.fillRect(235,318,65,20);x.strokeRect(235,318,65,20);
+ x.fillStyle=(S.on&&Math.floor(S.t*6)%2)?'#3ddc97':'#35506a';x.fillRect(290,321,6,6);
+ // ESC
+ x.fillStyle='#3a2a12';x.strokeStyle='#ffb347';x.fillRect(320,298,75,40);x.strokeRect(320,298,75,40);
+ x.fillStyle='#ffb347';x.font='bold 12px Arial';x.fillText('ESC',357,322);
+ // Провода: сигнал джойстика, питание, три фазы двигателя
+ line(125,326,235,328,'#8aa0b5',1.5);line(300,328,320,322,'#8aa0b5',1.5);
+ line(215,310,320,310,'#ff4d4d',4);line(215,318,320,318,'#667788',4);
+ var fc=['#ffd23f','#3ddc97','#4da3ff'];
+ for(k=0;k<3;k++)line(395,305+k*10,700,240+k*10,fc[k],2);
+ if(S.on){dots(125,326,235,328,'#29d3ff',1.5);dots(300,328,320,322,'#29d3ff',1.5)}
+ if(S.p>0){dots(215,310,320,310,'#ffb3b3',.6+f*2);
+  for(k=0;k<3;k++)dots(395,305+k*10,700,240+k*10,fc[k],.5+f*4)}
+ // БК-двигатель прямого привода на пилоне
+ line(733,275,733,340,'#556a80',7);
+ x.fillStyle='#1a2736';x.strokeStyle='#29d3ff';x.lineWidth=2;x.fillRect(700,225,66,50);x.strokeRect(700,225,66,50);
+ for(k=0;k<6;k++){a=S.prop+k*1.047;if(Math.cos(a)>0)line(704,250+22*Math.sin(a),762,250+22*Math.sin(a),k%2?'#ff4d4d':'#4da3ff',5)}
+ line(766,250,810,250,'#8aa0b5',6);
+ // Кольцевая насадка с дополнительными каналами
+ if(cf===2){
+  x.strokeStyle='#29d3ff';x.lineWidth=4;x.beginPath();
+  x.moveTo(790,162);x.lineTo(860,162);x.moveTo(790,338);x.lineTo(860,338);
+  x.moveTo(775,148);x.lineTo(875,148);x.moveTo(775,352);x.lineTo(875,352);x.stroke();
+  x.lineWidth=2;x.beginPath();x.moveTo(790,148);x.lineTo(790,162);x.moveTo(860,148);x.lineTo(860,162);x.moveTo(790,338);x.lineTo(790,352);x.moveTo(860,338);x.lineTo(860,352);x.stroke();
+  x.lineWidth=3;x.beginPath();x.ellipse(790,250,10,88,0,0,7);x.stroke();
+  x.globalAlpha=.5;x.beginPath();x.ellipse(860,250,10,88,0,0,7);x.stroke();x.globalAlpha=1;
+ }
+ // Винт: перфорированные лопасти (пунктир) и размытие на больших оборотах
+ if(f>.25){x.fillStyle='rgba(170,225,255,'+Math.min(.55,f*.9)+')';x.beginPath();x.ellipse(810,250,9,80,0,0,7);x.fill()}
+ x.globalAlpha=1-Math.min(.7,f*1.1);x.strokeStyle='#e6eef7';x.lineCap='round';
+ for(k=0;k<3;k++){a=S.prop+k*2.094;x.lineWidth=3+7*Math.abs(Math.cos(a));x.setLineDash(cf>0?[7,5]:[]);
+  x.beginPath();x.moveTo(810,250);x.lineTo(810+4*Math.cos(a),250+80*Math.sin(a));x.stroke()}
+ x.setLineDash([]);x.globalAlpha=1;x.lineCap='butt';x.fillStyle='#e6eef7';x.beginPath();x.arc(810,250,7,0,7);x.fill();
+ // Воздушные рули
+ var d=S.rud/100*.5,rw=8+34*Math.cos(d);x.fillStyle='rgba(255,138,61,.35)';x.strokeStyle='#ff8a3d';x.lineWidth=2;
+ x.fillRect(880,178,rw,144);x.strokeRect(880,178,rw,144);
+ x.restore();
+ // Вода
+ x.beginPath();x.moveTo(L,480);
+ for(var xx=L;xx<=R;xx+=10)x.lineTo(xx,385+Math.sin((xx-S.wave)*.03)*3+Math.sin((xx-S.wave*1.4)*.011)*5);
+ x.lineTo(R,480);x.closePath();
+ var wg=x.createLinearGradient(0,380,0,480);wg.addColorStop(0,'rgba(41,160,255,.55)');wg.addColorStop(1,'rgba(10,50,100,.85)');x.fillStyle=wg;x.fill();
+ x.strokeStyle='rgba(255,255,255,.35)';x.lineWidth=2;
+ for(i=0;i<12;i++){var fx=((i*131+S.wave*(1+i*.1))%1300)-100;line(fx,398+i*6,fx+14+S.v*.5,398+i*6,'rgba(255,255,255,.35)',2)}
+ x.fillStyle='rgba(255,255,255,.8)';D.forEach(function(p){x.globalAlpha=p.l;x.beginPath();x.arc(p.x,p.y,2.2,0,7);x.fill()});x.globalAlpha=1;
+ // Воздушный поток
+ if(S.rpm>40){
+  x.lineWidth=1.6;
+  P.forEach(function(p){
+   var v=(p.x<810?40+620*f:100+2000*f)*p.k;
+   line(p.x,p.y,p.x-4-v*.03,p.y,'rgba(130,225,255,'+(.15+.5*f)+')',1.6);
+  });
+  if(cf===2)C.forEach(function(c){line(c.x,c.y,c.x-10-f*30,c.y,'rgba(180,255,255,.9)',2)});
+ }
+ // Подписи узлов
+ x.textAlign='center';
+ lb('Джойстик',110,306,95,262);lb('АКБ 48 В',177,290,177,235);lb('Arduino Nano',268,318,268,275);lb('ESC (регулятор)',357,298,357,215);
+ lb('БК-двигатель, прямой привод (без редуктора)',733,225,600,186);
+ lb(cf===0?'Стандартный винт (открытый)':cf===1?'Перфорированные лопасти (открытый винт)':'Перфорированные лопасти в насадке',810,170,740,100,cf<2?'#ff8a8a':'');
+ if(cf===2)lb('Насадка + каналы',860,148,915,126);
+ lb('Воздушные рули',895,322,940,292);
+ lb('Упругодемпфирующий слой + антифрикционное покрытие',500,398,500,440);
+ // Вид сверху: рули и отклонение потока
+ x.save();x.translate(15,14);x.fillStyle='rgba(10,18,27,.82)';x.fillRect(0,0,255,112);x.strokeStyle='#243447';x.lineWidth=2;x.strokeRect(0,0,255,112);
+ x.fillStyle='#8aa0b5';x.font='11px Arial';x.textAlign='left';x.fillText('Вид сверху: рули и поток',8,14);
+ x.strokeStyle='#5aa9ff';x.lineWidth=2;x.strokeRect(10,40,98,40);
+ line(112,36,112,84,'#29d3ff',3);
+ var dd=S.rud/100*.5;
+ [52,68].forEach(function(py){line(128,py,128+30*Math.cos(dd),py+30*Math.sin(dd),'#ff8a3d',3)});
+ x.lineWidth=1.5;x.strokeStyle='rgba(130,225,255,'+(.2+.6*f)+')';
+ for(k=-2;k<=2;k++){x.beginPath();x.moveTo(116,60+k*7);x.quadraticCurveTo(150,60+k*7,245,60+k*7+S.rud*.45);x.stroke()}
+ x.fillStyle='#ffd080';x.font='bold 12px Arial';
+ x.fillText('Рули: '+Math.round(S.rud)+'%'+(S.rud<-5?'  ◄ влево':S.rud>5?'  вправо ►':'  прямо'),8,102);
+ x.restore();
+ x.fillStyle='#e6eef7';x.font='bold 14px Arial';x.textAlign='left';x.fillText('Аэропаром катамаранного типа «ПИОНЕР-М» · лопастной электродвижитель',290,32);
+ x.fillStyle='#8aa0b5';x.font='11px Arial';x.fillText('Вращение показано в замедленной съёмке',10,470);
+ x.textAlign='right';x.fillText('Патенты RU №2585180, 2585208, 2585209',990,470);
+}
+
+// Стрелочный прибор
+function gauge(c,v,max,step,div,red,lab){
+ var q=c.getContext('2d'),r=c.width/2,a0=.75*Math.PI,sw=1.5*Math.PI,n;
+ q.setTransform(1,0,0,1,0,0);q.clearRect(0,0,c.width,c.width);q.translate(r,r);
+ q.beginPath();q.arc(0,0,r-4,0,7);q.fillStyle='#0a121b';q.fill();q.strokeStyle='#243447';q.lineWidth=4;q.stroke();
+ q.textAlign='center';q.textBaseline='middle';
+ for(n=0;n<=max/step;n++){
+  var val=n*step,a=a0+sw*val/max,big=n%2===0,col=val>=red?'#ff4d4d':'#8aa0b5',s=big?.74:.8;
+  q.strokeStyle=col;q.lineWidth=big?3:1.5;q.beginPath();q.moveTo(Math.cos(a)*r*s,Math.sin(a)*r*s);q.lineTo(Math.cos(a)*r*.9,Math.sin(a)*r*.9);q.stroke();
+  if(big){q.fillStyle=col;q.font='bold '+r*.13+'px Arial';q.fillText(val/div,Math.cos(a)*r*.6,Math.sin(a)*r*.6)}
+ }
+ var an=a0+sw*Math.min(v,max)/max;
+ q.strokeStyle='#ff8a3d';q.lineWidth=r*.04;q.lineCap='round';q.beginPath();q.moveTo(0,0);q.lineTo(Math.cos(an)*r*.72,Math.sin(an)*r*.72);q.stroke();
+ q.fillStyle='#ff8a3d';q.beginPath();q.arc(0,0,r*.06,0,7);q.fill();
+ q.fillStyle='#8aa0b5';q.font=r*.11+'px Arial';q.fillText(lab,0,r*.33);
+ q.fillStyle='#29d3ff';q.font='bold '+r*.2+'px monospace';q.fillText(Math.round(v),0,r*.55);
+}
+
+function frame(ts){
+ var dt=Math.min(.05,(ts-last)/1000||0);last=ts;
+ upd(dt);draw();
+ gauge($('tach'),S.rpm,5000,500,1000,4500,'об/мин ×1000');
+ gauge($('spd'),S.v,110,10,1,200,'км/ч');
+ $('eta').textContent=S.eta?Math.round(S.eta*100):'—';
+ $('pw').textContent=(S.p/1000).toFixed(1);$('cur').textContent=Math.round(S.i);$('vol').textContent=Math.round(S.u);
+ $('soc').textContent=Math.round(S.soc);$('tp').textContent=Math.round(S.temp);$('tq').textContent=Math.round(S.thr);
+ $('nz').textContent=S.rpm>5?Math.round(52+28*S.rpm/5000+DB[S.cf]):'—';
+ $('tv').textContent=Math.round(S.th)+'%';$('rv').textContent=Math.round(S.rud)+'%';
+ $('stt').textContent=!S.on?(S.soc<=0?'АКБ разряжена':'ESC: питание выключено'):(S.rpm<5?'ESC: готов, жду команду джойстика':'Двигатель работает, прямой привод');
+ requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
