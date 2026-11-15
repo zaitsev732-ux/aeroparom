@@ -146,7 +146,7 @@ function draw(){
  // Лодка (качка и дифферент по скорости)
  x.save();x.translate(0,Math.sin(S.t*2.2)*1.6);x.translate(460,385);x.rotate(-S.v/110*.035);x.translate(-460,-385);
  function hull(){x.beginPath();x.moveTo(40,320);x.lineTo(100,340);x.lineTo(900,340);x.lineTo(920,372);x.lineTo(880,396);x.lineTo(130,396);x.lineTo(70,372);x.closePath()}
- x.save();x.translate(14,-9);hull();x.strokeStyle='rgba(90,169,255,.25)';x.lineWidth=2;x.stroke();x.restore();   // второй корпус катамарана
+ // катамаран: два корпуса показаны на виде сверху;   // второй корпус катамарана
  hull();x.fillStyle='rgba(60,120,180,.18)';x.fill();x.strokeStyle='#5aa9ff';x.lineWidth=2;x.stroke();
  // Упругодемпфирующий слой и антифрикционное покрытие днища
  x.fillStyle='rgba(255,179,71,.55)';x.fillRect(130,390,750,6);x.strokeStyle='#cfe3f5';x.lineWidth=1.5;
@@ -223,8 +223,8 @@ function draw(){
  lb('Упругодемпфирующий слой + антифрикционное покрытие',500,398,500,440);
  // Вид сверху: рули и отклонение потока
  x.save();x.translate(15,14);x.fillStyle='rgba(10,18,27,.82)';x.fillRect(0,0,255,112);x.strokeStyle='#243447';x.lineWidth=2;x.strokeRect(0,0,255,112);
- x.fillStyle='#8aa0b5';x.font='11px Arial';x.textAlign='left';x.fillText('Вид сверху: рули и поток',8,14);
- x.beginPath();x.moveTo(8,60);x.quadraticCurveTo(26,40,62,40);x.lineTo(108,40);x.lineTo(108,80);x.lineTo(62,80);x.quadraticCurveTo(26,80,8,60);x.closePath();x.fillStyle='rgba(90,169,255,.15)';x.fill();x.strokeStyle='#5aa9ff';x.lineWidth=2;x.stroke();
+ x.fillStyle='#8aa0b5';x.font='11px Arial';x.textAlign='left';x.fillText('Вид сверху: катамаран, рули и поток',8,14);
+ [44,76].forEach(function(yc){x.beginPath();x.moveTo(8,yc);x.quadraticCurveTo(24,yc-8,56,yc-8);x.lineTo(108,yc-8);x.lineTo(108,yc+8);x.lineTo(56,yc+8);x.quadraticCurveTo(24,yc+8,8,yc);x.closePath();x.fillStyle='rgba(90,169,255,.15)';x.fill();x.strokeStyle='#5aa9ff';x.lineWidth=2;x.stroke()});x.fillStyle='#5aa9ff';x.fillRect(36,52,6,16);x.fillRect(78,52,6,16);
  line(112,36,112,84,'#29d3ff',3);
  var dd=S.rud/100*.5;
  [52,68].forEach(function(py){line(128,py,128+30*Math.cos(dd),py+30*Math.sin(dd),'#ff8a3d',3)});
