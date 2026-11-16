@@ -38,13 +38,14 @@ button.on{background:#0d4f33;border-color:var(--ok)}
 <div class="gz"><canvas id="spd" width="300" height="300"></canvas></div>
 <div class="box">
 <div class="dg">
-<div><b id="eta">0</b><span>КПД, %</span></div><div><b id="pw">0.0</b><span>Мощн., кВт</span></div><div><b id="cur">0</b><span>Ток, А</span></div><div><b id="vol">52</b><span>Напр., В</span></div>
-<div><b id="soc">100</b><span>Заряд АКБ, %</span></div><div><b id="tp">20</b><span>Темп. дв., °C</span></div><div><b id="tq">0</b><span>Тяга, кгс</span></div><div><b id="nz">—</b><span>Шум, дБ</span></div>
+<div><b id="eta">0</b><span>КПД, %</span></div><div><b id="pw">0.0</b><span id="l2">Мощн., кВт</span></div><div><b id="cur">0</b><span id="l3">Ток, А</span></div><div><b id="vol">52</b><span id="l4">Напр., В</span></div>
+<div><b id="soc">100</b><span id="l5">Заряд АКБ, %</span></div><div><b id="tp">20</b><span>Темп. дв., °C</span></div><div><b id="tq">0</b><span>Тяга, кгс</span></div><div><b id="nz">—</b><span>Шум, дБ</span></div>
 </div>
 <div class="hint" id="stt">ESC: питание выключено</div>
 <div class="hint">Электропривод 90–95 % · ДВС-аналог 22–60 %</div>
 </div>
 <div class="box ctl">
+<select id="dr"><option value="0" selected>Электродвижитель (БК, прямой привод)</option><option value="1">ДВС + редуктор (аналог)</option></select>
 <select id="cf"><option value="0">Стандартные лопасти, открытый винт</option><option value="1">Перфорированные лопасти наборного типа</option><option value="2" selected>Перфорированные лопасти + насадка + каналы</option></select>
 <label>Джойстик: тяга <b id="tv">0%</b></label>
 <input type="range" id="thr" min="0" max="100" step="1" value="0">
@@ -60,7 +61,7 @@ button.on{background:#0d4f33;border-color:var(--ok)}
 var $=function(i){return document.getElementById(i)};
 var cv=$('sc'),x=cv.getContext('2d');
 // Состояние системы; cf — конфигурация лопастей (0 стандартные, 1 перфорированные, 2 + насадка и каналы)
-var S={on:false,prop:0,rpm:0,th:0,rud:0,v:0,temp:20,thr:0,t:0,wave:0,cl:0,soc:100,p:0,i:0,u:52,eta:0,cf:2};
+var S={on:false,dr:0,mx:5000,fl:0,crank:0,prop:0,rpm:0,th:0,rud:0,v:0,temp:20,thr:0,t:0,wave:0,cl:0,soc:100,p:0,i:0,u:52,eta:0,cf:2};
 var KT=[1,1.08,1.2],DB=[0,-4,-7];
 var keys={},drag=false,W=1,H=1,sc=1,ox=0,oy=0,P=[],C=[],D=[],last=0,i;
 for(i=0;i<130;i++)P.push({x:Math.random()*1000,y:250+(Math.random()-.5)*190,k:.7+Math.random()*.6});
@@ -71,10 +72,11 @@ function rs(){var d=window.devicePixelRatio||1,r=cv.getBoundingClientRect();W=cv
 new ResizeObserver(rs).observe(cv);rs();
 
 // Питание ESC (вкл/выкл)
-function pwr(on){S.on=on;var b=$('st');b.textContent=on?'ВЫКЛЮЧИТЬ ПИТАНИЕ':'ВКЛЮЧИТЬ ПИТАНИЕ (ESC)';b.classList.toggle('on',on);b.blur()}
+function pwr(on){S.on=on;var b=$('st');b.textContent=on?(S.dr?'ОСТАНОВИТЬ ДВС':'ВЫКЛЮЧИТЬ ПИТАНИЕ'):(S.dr?'ЗАПУСК (СТАРТЕР)':'ВКЛЮЧИТЬ ПИТАНИЕ (ESC)');b.classList.toggle('on',on);b.blur()}
 $('st').onclick=function(){if(S.soc>0)pwr(!S.on)};
 $('thr').oninput=function(){S.th=+this.value};
 $('cf').onchange=function(){S.cf=+this.value;this.blur()};
+$('dr').onchange=function(){S.dr=+this.value;S.mx=S.dr?6500:5000;S.soc=100;pwr(false);this.blur()};
 $('rud').onpointerdown=function(){drag=true};
 window.addEventListener('pointerup',function(){drag=false});
 window.addEventListener('pointercancel',function(){drag=false});
@@ -93,20 +95,20 @@ function upd(dt){
  if(!drag)$('rud').value=S.rud;
  $('thr').value=S.th;
  // Бесколлекторный двигатель: нет холостого хода, момент с нуля — отклик быстрый
- var tg=(S.on&&S.th>=4)?S.th*50:0;
- S.rpm+=(tg-S.rpm)*Math.min(1,dt*(S.on?4:2.5));if(S.rpm<3&&!tg)S.rpm=0;
- var f=S.rpm/5000;
- S.thr=120*KT[S.cf]*f*f;
+ var dv=S.dr,tg=dv?(S.on?900+S.th*56:0):((S.on&&S.th>=4)?S.th*50:0);S.mx=dv?6500:5000;
+ S.rpm+=(tg-S.rpm)*Math.min(1,dt*(dv?(S.on?(S.rpm<850?2.5:1.6):1.3):(S.on?4:2.5)));if(S.rpm<(dv?20:3)&&!tg)S.rpm=0;
+ var f=S.rpm/S.mx;
+ S.thr=dv?130*KT[S.cf]*Math.pow(Math.max(0,S.rpm-500)/6000,2):120*KT[S.cf]*f*f;
  // Мощность на валу ~n^3, электрическая = вал / КПД (90–95 %), ток от напряжения АКБ
- S.eta=S.rpm>5?.9+.05*f:0;
- S.p=(S.on&&S.eta)?7000*f*f*f/S.eta:0;
- S.u=44+8*S.soc/100-S.p/8000*2;S.i=S.p/S.u;
- S.soc=Math.max(0,S.soc-S.p*dt*.0001157);   // расход заряда ускорен примерно в 20 раз
+ S.eta=S.rpm>5?(dv?.22+.38*Math.sin(Math.PI*f):.9+.05*f):0;
+ S.p=(S.on&&S.eta)?7000*(dv?Math.pow(Math.max(0,S.rpm-500)/6000,3):f*f*f)/S.eta+(dv?2500:0):0;
+ S.u=44+8*S.soc/100-S.p/8000*2;S.i=dv?0:S.p/S.u;S.fl=dv?S.p/9700:0;
+ S.soc=Math.max(0,S.soc-(dv?S.fl*dt*.14:S.p*dt*.0001157));   // расход заряда ускорен примерно в 20 раз
  if(S.soc<=0&&S.on)pwr(false);
  // Скорость с инерцией: сопротивление ~v^2 + трение
  S.v+=((S.thr-.0132*S.v*S.v-(S.v>.5?6:0))/16)*dt;if(S.v<0)S.v=0;
- var tt=20+60*S.p/7000;S.temp+=(tt-S.temp)*dt*.05;
- S.prop-=S.rpm/60*6.283*.08*dt;   // прямой привод: винт вращается вместе с ротором (замедленная съёмка)
+ var tt=dv?(S.on?70+30*f:20):20+60*S.p/7000;S.temp+=(tt-S.temp)*dt*.05;
+ S.prop-=S.rpm/60*6.283*.08*dt*(dv?.45:1);S.crank+=S.rpm/60*6.283*.08*dt;   // прямой привод: винт вращается вместе с ротором (замедленная съёмка)
  S.wave+=(S.v*9+14)*dt;S.cl+=(S.v*1.2+3)*dt;
  // Воздушный поток
  var pf=S.rpm>40?1:0;
@@ -133,6 +135,7 @@ function dots(x1,y1,x2,y2,col,sp){
  x.fillStyle=col;
  for(var n=0;n<3;n++){var t=(S.t*sp+n/3)%1;x.beginPath();x.arc(x1+(x2-x1)*t,y1+(y2-y1)*t,2.6,0,7);x.fill()}
 }
+function gear(cx,cy,r,a,n,col){x.save();x.translate(cx,cy);x.rotate(a);x.strokeStyle=col;x.fillStyle=col;x.lineWidth=2;x.beginPath();x.arc(0,0,r-3,0,7);x.stroke();for(var g=0;g<n;g++){x.rotate(6.283/n);x.fillRect(r-3,-2.5,5,5)}x.beginPath();x.moveTo(-(r-5),0);x.lineTo(r-5,0);x.moveTo(0,-(r-5));x.lineTo(0,r-5);x.stroke();x.restore()}
 function line(x1,y1,x2,y2,col,w){x.strokeStyle=col;x.lineWidth=w;x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke()}
 
 // Отрисовка сцены
@@ -140,7 +143,7 @@ function draw(){
  x.setTransform(1,0,0,1,0,0);
  var g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#0b1a2b');g.addColorStop(1,'#1c3a55');x.fillStyle=g;x.fillRect(0,0,W,H);
  x.setTransform(sc,0,0,sc,ox,oy);x.textAlign='center';
- var L=-ox/sc-10,R=(W-ox)/sc+10,f=S.rpm/5000,k,a,cf=S.cf,on=S.on&&S.rpm>5;
+ var L=-ox/sc-10,R=(W-ox)/sc+10,f=S.rpm/S.mx,k,a,cf=S.cf,on=S.on&&S.rpm>5;
  x.fillStyle='rgba(255,255,255,.07)';
  for(i=0;i<6;i++){x.beginPath();x.ellipse(((i*260+S.cl)%1500)-250,60+(i%3)*35,70,16,0,0,7);x.fill()}
  // Лодка (качка и дифферент по скорости)
@@ -155,7 +158,7 @@ function draw(){
  var ja=S.th/100*.9-.45,jx=110+26*Math.sin(ja),jy=332-26*Math.cos(ja);
  x.fillStyle='#243447';x.fillRect(95,332,30,8);line(110,332,jx,jy,'#e6eef7',4);x.fillStyle='#ff4d4d';x.beginPath();x.arc(jx,jy,5,0,7);x.fill();
  // АКБ
- x.fillStyle='#1a2736';x.strokeStyle='#3ddc97';x.lineWidth=2;x.fillRect(140,290,75,48);x.strokeRect(140,290,75,48);
+ if(!S.dr){x.fillStyle='#1a2736';x.strokeStyle='#3ddc97';x.lineWidth=2;x.fillRect(140,290,75,48);x.strokeRect(140,290,75,48);
  x.fillStyle=S.soc>20?'#3ddc97':'#ff4d4d';x.fillRect(146,296,63*S.soc/100,12);
  x.fillStyle='#8aa0b5';x.font='11px Arial';x.fillText('48 В',177,328);
  // Arduino Nano
@@ -177,6 +180,7 @@ function draw(){
  x.fillStyle='#1a2736';x.strokeStyle='#29d3ff';x.lineWidth=2;x.fillRect(700,225,66,50);x.strokeRect(700,225,66,50);
  for(k=0;k<6;k++){a=S.prop+k*1.047;if(Math.cos(a)>0)line(704,250+22*Math.sin(a),762,250+22*Math.sin(a),k%2?'#ff4d4d':'#4da3ff',5)}
  line(766,250,810,250,'#8aa0b5',6);
+ }else{x.fillStyle='#1a2736';x.strokeStyle='#ffb347';x.lineWidth=2;x.fillRect(140,290,75,48);x.strokeRect(140,290,75,48);x.fillStyle=S.soc>15?'#ffb347':'#ff4d4d';x.fillRect(146,296,63*S.soc/100,12);x.fillStyle='#8aa0b5';x.font='11px Arial';x.fillText('Бак',177,328);line(215,322,360,322,'#8aa0b5',3);x.fillStyle='#1a2736';x.strokeStyle='#ff8a3d';x.fillRect(360,235,150,105);x.strokeRect(360,235,150,105);[400,470].forEach(function(px,j){var a2=S.crank+j*Math.PI,py=312-(12*Math.cos(a2)+Math.sqrt(1156-144*Math.pow(Math.sin(a2),2)));x.strokeStyle='#3b5873';x.lineWidth=2;x.strokeRect(px-17,252,34,48);line(px,py+4,435+12*Math.sin(a2),312-12*Math.cos(a2),'#cfe3f5',2);x.fillStyle='#ff8a3d';x.fillRect(px-15,py-10,30,14)});x.strokeStyle='#cfe3f5';x.lineWidth=2;x.beginPath();x.arc(435,312,14,0,7);x.stroke();line(450,312,565,312,'#8aa0b5',5);gear(565,312,20,S.crank,10,'#ffb347');gear(607,312,22,-S.crank*20/22+.31,11,'#29d3ff');line(607,312,810,250,'#8aa0b5',5);x.fillStyle='#e6eef7';x.beginPath();x.arc(700,281,5,0,7);x.fill();line(510,262,545,262,'#667788',6);if(S.rpm>20){for(k=0;k<4;k++){var tq=(S.t*.8+k/4)%1;x.fillStyle='rgba(150,150,150,'+(.45*(1-tq))+')';x.beginPath();x.arc(545+60*tq,262-40*tq,4+9*tq,0,7);x.fill()}}}
  // Кольцевая насадка с дополнительными каналами
  if(cf===2){
   x.strokeStyle='#29d3ff';x.lineWidth=4;x.beginPath();
@@ -185,6 +189,7 @@ function draw(){
   x.lineWidth=2;x.beginPath();x.moveTo(790,148);x.lineTo(790,162);x.moveTo(860,148);x.lineTo(860,162);x.moveTo(790,338);x.lineTo(790,352);x.moveTo(860,338);x.lineTo(860,352);x.stroke();
   x.lineWidth=3;x.beginPath();x.ellipse(790,250,10,88,0,0,7);x.stroke();
   x.globalAlpha=.5;x.beginPath();x.ellipse(860,250,10,88,0,0,7);x.stroke();x.globalAlpha=1;
+  if(S.rpm>40){x.fillStyle='rgba(200,255,255,.95)';C.forEach(function(c){x.beginPath();x.moveTo(c.x+4,c.y);x.lineTo(c.x-4,c.y-3.5);x.lineTo(c.x-4,c.y+3.5);x.closePath();x.fill()})}
  }
  // Винт: перфорированные лопасти (пунктир) и размытие на больших оборотах
  if(f>.25){x.fillStyle='rgba(170,225,255,'+Math.min(.55,f*.9)+')';x.beginPath();x.ellipse(810,250,9,80,0,0,7);x.fill()}
@@ -209,14 +214,17 @@ function draw(){
   x.lineWidth=1.6;
   P.forEach(function(p){
    var v=(p.x<810?40+620*f:100+2000*f)*p.k;
-   line(p.x,p.y,p.x-4-v*.03,p.y,'rgba(130,225,255,'+(.15+.5*f)+')',1.6);
+   var ang=-S.v/110*.035,ca=Math.cos(ang),sa=Math.sin(ang),dy=Math.sin(S.t*2.2)*1.6,ex=p.x-4-v*.03;
+   var A=[460+(p.x-460)*ca-(p.y-385)*sa,385+(p.x-460)*sa+(p.y-385)*ca+dy],B=[460+(ex-460)*ca-(p.y-385)*sa,385+(ex-460)*sa+(p.y-385)*ca+dy];
+   line(A[0],A[1],B[0],B[1],'rgba(130,225,255,'+(.15+.5*f)+')',1.6);
   });
-  if(cf===2){x.fillStyle='rgba(200,255,255,.95)';C.forEach(function(c){x.beginPath();x.moveTo(c.x+4,c.y);x.lineTo(c.x-4,c.y-3.5);x.lineTo(c.x-4,c.y+3.5);x.closePath();x.fill()})}
+  
  }
  // Подписи узлов
  x.textAlign='center';
- lb('Джойстик',110,306,95,262);lb('АКБ 48 В',177,290,177,235);lb('Arduino Nano',268,318,268,275);lb('ESC (регулятор)',357,298,357,215);
- lb('БК-двигатель, прямой привод (без редуктора)',733,225,600,186);
+ lb(S.dr?'РУД (рычаг газа)':'Джойстик',110,306,95,262);
+ if(S.dr){lb('Топливный бак',177,290,177,235);lb('ДВС',435,235,435,205);lb('Редуктор',586,290,586,262)}else{lb('АКБ 48 В',177,290,177,235);lb('Arduino Nano',268,318,268,275);lb('ESC (регулятор)',357,298,357,215)}
+ if(!S.dr)lb('БК-двигатель, прямой привод (без редуктора)',733,225,600,186);
  lb(cf===0?'Стандартный винт (открытый)':cf===1?'Перфорированные лопасти (открытый винт)':'Перфорированные лопасти в насадке',810,170,740,100,cf<2?'#ff8a8a':'');
  if(cf===2){lb('Кольцевая насадка',860,148,915,126);lb('Доп. каналы (эжектор)',835,351,905,382)}
  lb('Воздушные рули',895,322,940,292);
@@ -259,14 +267,14 @@ function gauge(c,v,max,step,div,red,lab){
 function frame(ts){
  var dt=Math.min(.05,(ts-last)/1000||0);last=ts;
  upd(dt);draw();
- gauge($('tach'),S.rpm,5000,500,1000,4500,'об/мин ×1000');
+ gauge($('tach'),S.rpm,S.mx,500,1000,S.dr?5800:4500,'об/мин ×1000');
  gauge($('spd'),S.v,110,10,1,200,'км/ч');
  $('eta').textContent=S.eta?Math.round(S.eta*100):'—';
- $('pw').textContent=(S.p/1000).toFixed(1);$('cur').textContent=Math.round(S.i);$('vol').textContent=Math.round(S.u);
+ $('pw').textContent=(S.p/1000).toFixed(1);$('cur').textContent=S.dr?S.fl.toFixed(1):Math.round(S.i);$('vol').textContent=S.dr?(S.fl*.64).toFixed(1):Math.round(S.u);$('l2').textContent=S.dr?'Мощн. топл., кВт':'Мощн., кВт';$('l3').textContent=S.dr?'Расход, л/ч':'Ток, А';$('l4').textContent=S.dr?'CO₂, г/с':'Напр., В';$('l5').textContent=S.dr?'Топливо, %':'Заряд АКБ, %';
  $('soc').textContent=Math.round(S.soc);$('tp').textContent=Math.round(S.temp);$('tq').textContent=Math.round(S.thr);
- $('nz').textContent=S.rpm>5?Math.round(52+28*S.rpm/5000+DB[S.cf]):'—';
+ $('nz').textContent=S.rpm>5?Math.round(S.dr?66+30*S.rpm/6500+DB[S.cf]:52+28*S.rpm/5000+DB[S.cf]):'—';
  $('tv').textContent=Math.round(S.th)+'%';$('rv').textContent=Math.round(S.rud)+'%';
- $('stt').textContent=!S.on?(S.soc<=0?'АКБ разряжена':'ESC: питание выключено'):(S.rpm<5?'ESC: готов, жду команду джойстика':'Двигатель работает, прямой привод');
+ $('stt').textContent=S.dr?(!S.on?(S.soc<=0?'Топливо закончилось':'ДВС заглушен'):(S.rpm<850?'Запуск стартером…':'ДВС работает, редуктор 2,2:1')):(!S.on?(S.soc<=0?'АКБ разряжена':'ESC: питание выключено'):(S.rpm<5?'ESC: готов, жду команду джойстика':'Двигатель работает, прямой привод'));
  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
