@@ -234,10 +234,10 @@ function draw(){
  x.fillStyle='#8aa0b5';x.font='11px Arial';x.textAlign='left';x.fillText('Вид сверху: катамаран, рули и поток',8,14);
  [44,76].forEach(function(yc){x.beginPath();x.moveTo(8,yc);x.quadraticCurveTo(24,yc-8,56,yc-8);x.lineTo(108,yc-8);x.lineTo(108,yc+8);x.lineTo(56,yc+8);x.quadraticCurveTo(24,yc+8,8,yc);x.closePath();x.fillStyle='rgba(90,169,255,.15)';x.fill();x.strokeStyle='#5aa9ff';x.lineWidth=2;x.stroke()});x.fillStyle='#5aa9ff';x.fillRect(36,52,6,16);x.fillRect(78,52,6,16);
  line(112,36,112,84,'#29d3ff',3);
- var dd=S.rud/100*.5;
+ var dd=-S.rud/100*.5;
  [52,68].forEach(function(py){line(128,py,128+30*Math.cos(dd),py+30*Math.sin(dd),'#ff8a3d',3)});
  x.lineWidth=1.5;x.strokeStyle='rgba(130,225,255,'+(.2+.6*f)+')';
- for(k=-2;k<=2;k++){x.beginPath();x.moveTo(116,60+k*7);x.quadraticCurveTo(150,60+k*7,245,60+k*7+S.rud*.45);x.stroke()}
+ for(k=-2;k<=2;k++){x.beginPath();x.moveTo(116,60+k*7);x.quadraticCurveTo(150,60+k*7,245,60+k*7-S.rud*.45);x.stroke()}
  x.fillStyle='#ffd080';x.font='bold 12px Arial';
  x.fillText('Рули: '+Math.round(S.rud)+'%'+(S.rud<-5?'  ◄ влево':S.rud>5?'  вправо ►':'  прямо'),8,102);
  x.restore();
